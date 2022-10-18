@@ -1,28 +1,26 @@
+variable "project_id" {
+  description = "project id"
+}
+
+variable "region" {
+  description = "region"
+}
+
 provider "google" {
-  project = "shibug"
-  region  = "us-central1"
-  zone    = "us-central1-c"
+  project = var.project_id
+  region  = var.region
 }
 
-resource "google_compute_network" "vpc_network" {
-  name                    = "terraform-network"
-  auto_create_subnetworks = "true"
+# VPC
+resource "google_compute_network" "vpc" {
+  name                    = "${var.project_id}-vpc"
+  auto_create_subnetworks = "false"
 }
 
-resource "google_compute_instance" "vm_instance" {
-  name         = "terraform-instance"
-  machine_type = "e2-micro"
-
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-11"
-    }
-  }
-
-  network_interface {
-    # A default network is created for all GCP projects
-    network = google_compute_network.vpc_network.self_link
-    access_config {
-    }
-  }
+# Subnet
+resource "google_compute_subnetwork" "subnet" {
+  name          = "${var.project_id}-subnet"
+  region        = var.region
+  network       = google_compute_network.vpc.name
+  ip_cidr_range = "10.10.0.0/24"
 }
