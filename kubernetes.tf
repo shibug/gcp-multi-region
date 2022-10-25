@@ -7,82 +7,287 @@ provider "kubernetes" {
   cluster_ca_certificate = base64decode(google_container_cluster.gcc.master_auth[0].cluster_ca_certificate)
 }
 
+variable "dbserver" {
+  description = "name of the database server"
+  default     = "cockroachdb"
+}
+
 resource "kubernetes_namespace" "kn" {
   metadata {
-    name = "cockroachdb"
+    name = var.dbserver
   }
 }
 resource "kubernetes_service_account" "ksa" {
   metadata {
-    name = "cockroachdb"
+    name      = var.dbserver
     namespace = kubernetes_namespace.kn.id
     labels = {
-      app: "cockroachdb"
+      app : var.dbserver
     }
-  }
-}
-resource "kubernetes_role" "kr" {
-  metadata {
-    name = "cockroachdb"
-    namespace = kubernetes_namespace.kn.id
-    labels = {
-      app = "cockroachdb"
-    }
-  }
-  rule {
-    api_groups     = [""]
-    resources      = ["secrets"]
-    verbs          = ["get"]
   }
 }
 
-#------------------
-resource "kubernetes_deployment" "kd" {
+resource "kubernetes_secret" "ks-client-root" {
   metadata {
-    name      = "hello-server"
+    name      = "${var.dbserver}.client.root"
     namespace = kubernetes_namespace.kn.id
     labels = {
-      test = "hello-server"
+      app : var.dbserver
+    }
+  }
+
+  data = {
+    "ca.crt"          = "${file("${path.module}/certs/ca.crt")}"
+    "client.root.crt" = "${file("${path.module}/certs/client.root.crt")}"
+    "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
+  }
+}
+
+resource "kubernetes_secret" "ks-node" {
+  metadata {
+    name      = "${var.dbserver}.node"
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app : var.dbserver
+    }
+  }
+
+  data = {
+    "ca.crt"          = "${file("${path.module}/certs/ca.crt")}"
+    "client.root.crt" = "${file("${path.module}/certs/client.root.crt")}"
+    "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
+    "node.crt"        = "${file("${path.module}/certs/node.crt")}"
+    "node.key"        = "${file("${path.module}/certs/node.key")}"
+  }
+}
+
+resource "kubernetes_role" "kr" {
+  metadata {
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
+    }
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["secrets"]
+    verbs      = ["get"]
+  }
+}
+
+resource "kubernetes_role_binding" "krb" {
+  metadata {
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
+    }
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = var.dbserver
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+  }
+}
+
+resource "kubernetes_stateful_set" "kss" {
+  metadata {
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
     }
   }
 
   spec {
-    replicas = 1
-
+    replicas = 3
     selector {
       match_labels = {
-        test = "hello-server"
+        app = var.dbserver
       }
     }
-
+    service_name = var.dbserver
     template {
       metadata {
         labels = {
-          test = "hello-server"
+          app = var.dbserver
         }
       }
 
       spec {
+        service_account_name = var.dbserver
+
+        affinity {
+          pod_affinity {
+            preferred_during_scheduling_ignored_during_execution {
+              weight = 100
+              pod_affinity_term {
+                label_selector {
+                  match_expressions {
+                    key      = "app"
+                    operator = "In"
+                    values   = [var.dbserver]
+                  }
+                }
+                topology_key = "kubernetes.io/hostname"
+              }
+            }
+          }
+        }
+
         container {
-          image = "us-docker.pkg.dev/google-samples/containers/gke/hello-app:1.0"
-          name  = "hello-server"
+          name              = var.dbserver
+          image             = "${var.dbserver}/cockroach:v22.1.9"
+          image_pull_policy = "IfNotPresent"
+
+          resources {
+            requests = {
+              cpu    = "1"
+              memory = "4Gi"
+            }
+            limits = {
+              cpu    = "1"
+              memory = "4Gi"
+            }
+          }
+
+          port {
+            container_port = 9090
+            name           = "grpc"
+          }
+
+          port {
+            container_port = 8080
+            name           = "http"
+          }
+
+          readiness_probe {
+            http_get {
+              path   = "/health?ready=1"
+              port   = "http"
+              scheme = "HTTPS"
+            }
+            initial_delay_seconds = 10
+            period_seconds        = 5
+            failure_threshold     = 2
+          }
+
+          volume_mount {
+            name       = "datadir"
+            mount_path = "/cockroach/cockroach-data"
+          }
+
+          volume_mount {
+            name       = "certs"
+            mount_path = "/cockroach/cockroach-certs"
+          }
+
+          env {
+            name  = "COCKROACH_CHANNEL"
+            value = "kubernetes-secure"
+          }
+
+          env {
+            name = "GOMAXPROCS"
+            value_from {
+              resource_field_ref {
+                resource = "limits.cpu"
+                divisor  = "1"
+              }
+            }
+          }
+
+          env {
+            name = "MEMORY_LIMIT_MIB"
+            value_from {
+              resource_field_ref {
+                resource = "limits.memory"
+                divisor  = "1Mi"
+              }
+            }
+          }
+
+          command = ["/bin/bash",
+            "-ecx",
+            "exec",
+            "/cockroach/cockroach",
+            "start",
+            "--logtostderr",
+            "--certs-dir /cockroach/cockroach-certs",
+            "--advertise-host $(hostname -f)",
+            "--http-addr 0.0.0.0",
+            "--join cockroachdb-0.cockroachdb,cockroachdb-1.cockroachdb,cockroachdb-2.cockroachdb",
+            "--cache $(expr $MEMORY_LIMIT_MIB / 4)MiB",
+          "--max-sql-memory $(expr $MEMORY_LIMIT_MIB / 4)MiB"]
+        }
+
+        termination_grace_period_seconds = 60
+        volume {
+          name = "datadir"
+          persistent_volume_claim {
+            claim_name = "datadir"
+          }
+        }
+
+        volume {
+          name = "certs"
+          secret {
+            secret_name  = kubernetes_secret.ks-node.id
+            default_mode = "0400"
+          }
+        }
+      }
+    }
+    pod_management_policy = "Parallel"
+    update_strategy {
+      type = "RollingUpdate"
+    }
+
+    volume_claim_template {
+      metadata {
+        name = "datadir"
+      }
+      spec {
+        access_modes = ["ReadWriteOnce"]
+        resources {
+          requests = {
+            storage = "16Gi"
+          }
         }
       }
     }
   }
 }
 
-resource "kubernetes_service" "ks" {
+resource "kubernetes_service" "ks-public" {
   metadata {
-    name      = "hello-server"
+    name      = "${var.dbserver}-public"
     namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
+    }
   }
   spec {
     selector = {
-      test = kubernetes_deployment.kd.spec.0.template.0.metadata[0].labels.test
+      app = kubernetes_stateful_set.kss.spec.0.template.0.metadata[0].labels.app
     }
     port {
-      port        = 80
+      name        = "grpc"
+      port        = 26257
+      target_port = 26257
+    }
+    port {
+      name        = "http"
+      port        = 8080
       target_port = 8080
     }
 
@@ -90,6 +295,58 @@ resource "kubernetes_service" "ks" {
   }
 }
 
-output "lb_ip" {
-  value = kubernetes_service.ks.status.0.load_balancer.0.ingress.0.ip
+resource "kubernetes_service" "ks" {
+  metadata {
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
+    }
+    annotations = {
+      "service.alpha.kubernetes.io/tolerate-unready-endpoints" = "true"
+      "prometheus.io/scrape"                                   = "true"
+      "prometheus.io/path"                                     = "_status/vars"
+      "prometheus.io/port"                                     = "8080"
+    }
+  }
+  spec {
+    port {
+      name        = "grpc"
+      port        = 26257
+      target_port = 26257
+    }
+    port {
+      name        = "http"
+      port        = 8080
+      target_port = 8080
+    }
+
+    publish_not_ready_addresses = true
+    cluster_ip                  = "None"
+    selector = {
+      app = kubernetes_stateful_set.kss.spec.0.template.0.metadata[0].labels.app
+    }
+  }
 }
+
+resource "kubernetes_pod_disruption_budget" "kpdb" {
+  metadata {
+    name      = "${var.dbserver}-budget"
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app = var.dbserver
+    }
+  }
+  spec {
+    max_unavailable = "1"
+    selector {
+      match_labels = {
+        app = kubernetes_stateful_set.kss.spec.0.template.0.metadata[0].labels.app
+      }
+    }
+  }
+}
+
+output "lb_ip" {
+  value = kubernetes_service.ks-public.status.0.load_balancer.0.ingress.0.ip
+} 
