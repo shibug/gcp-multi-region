@@ -151,17 +151,17 @@ resource "kubernetes_stateful_set" "kss" {
 
           resources {
             requests = {
-              cpu    = "1"
-              memory = "4Gi"
+              cpu    = "2"
+              memory = "8Gi"
             }
             limits = {
-              cpu    = "1"
-              memory = "4Gi"
+              cpu    = "2"
+              memory = "8Gi"
             }
           }
 
           port {
-            container_port = 9090
+            container_port = 26257
             name           = "grpc"
           }
 
@@ -170,7 +170,7 @@ resource "kubernetes_stateful_set" "kss" {
             name           = "http"
           }
 
-          readiness_probe {
+          /* readiness_probe {
             http_get {
               path   = "/health?ready=1"
               port   = "http"
@@ -179,7 +179,7 @@ resource "kubernetes_stateful_set" "kss" {
             initial_delay_seconds = 10
             period_seconds        = 5
             failure_threshold     = 2
-          }
+          } */
 
           volume_mount {
             name       = "datadir"
@@ -216,18 +216,11 @@ resource "kubernetes_stateful_set" "kss" {
             }
           }
 
-          command = ["/bin/bash",
+          command = [
+            "/bin/bash",
             "-ecx",
-            "exec",
-            "/cockroach/cockroach",
-            "start",
-            "--logtostderr",
-            "--certs-dir /cockroach/cockroach-certs",
-            "--advertise-host $(hostname -f)",
-            "--http-addr 0.0.0.0",
-            "--join cockroachdb-0.cockroachdb,cockroachdb-1.cockroachdb,cockroachdb-2.cockroachdb",
-            "--cache $(expr $MEMORY_LIMIT_MIB / 4)MiB",
-          "--max-sql-memory $(expr $MEMORY_LIMIT_MIB / 4)MiB"]
+            "exec /cockroach/cockroach start --log=\"sinks: {stderr: {channels: [ALL]}}\" --certs-dir /cockroach/cockroach-certs --advertise-addr $(hostname -f) --http-addr 0.0.0.0 --join cockroachdb-0.cockroachdb.cockroachdb.svc.cluster.local,cockroachdb-1.cockroachdb.cockroachdb.svc.cluster.local,cockroachdb-2.cockroachdb.cockroachdb.svc.cluster.local --cache $(expr $MEMORY_LIMIT_MIB / 4)MiB --max-sql-memory $(expr $MEMORY_LIMIT_MIB / 4)MiB"
+          ]
         }
 
         termination_grace_period_seconds = 60
@@ -241,7 +234,7 @@ resource "kubernetes_stateful_set" "kss" {
         volume {
           name = "certs"
           secret {
-            secret_name  = kubernetes_secret.ks-node.id
+            secret_name  = "${var.dbserver}.node"
             default_mode = "0400"
           }
         }

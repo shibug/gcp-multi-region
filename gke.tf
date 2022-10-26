@@ -4,7 +4,7 @@ variable "gke_num_nodes" {
 }
 
 variable "machine_type" {
-  default     = "e2-standard-2"
+  default     = "e2-standard-4"
   description = "Machine type for worker plane"
 }
 
@@ -14,8 +14,8 @@ data "google_service_account" "terraform" {
 
 # GKE cluster
 resource "google_container_cluster" "gcc" {
-  name     = "${var.project_id}-gke"
-  location = var.region
+  name                     = "${var.project_id}-gke"
+  location                 = var.region
   remove_default_node_pool = true
   initial_node_count       = 1
 
@@ -31,7 +31,7 @@ resource "google_container_node_pool" "gcnp" {
   node_count = var.gke_num_nodes
 
   node_config {
-    machine_type = var.machine_type
+    machine_type    = var.machine_type
     service_account = data.google_service_account.terraform.email
     oauth_scopes = [
       "https://www.googleapis.com/auth/logging.write",
@@ -42,7 +42,7 @@ resource "google_container_node_pool" "gcnp" {
     labels = {
       env = var.project_id
     }
-    tags         = ["gke-node", "${var.project_id}-gke"]
+    tags = ["gke-node", "${var.project_id}-gke"]
     metadata = {
       disable-legacy-endpoints = "true"
     }

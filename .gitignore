@@ -2,3 +2,6 @@
 .terraform/
 terraform.*
 main.tf
+.terraform.tfstate.lock.info
+certs/*.key
+my-safe-directory/
