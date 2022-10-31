@@ -17,6 +17,7 @@ resource "kubernetes_namespace" "kn" {
     name = var.dbserver
   }
 }
+
 resource "kubernetes_service_account" "ksa" {
   metadata {
     name      = var.dbserver
