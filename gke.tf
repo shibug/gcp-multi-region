@@ -8,8 +8,9 @@ variable "machine_type" {
   description = "Machine type for worker plane"
 }
 
-data "google_service_account" "terraform" {
-  account_id = "Terraform"
+resource "google_service_account" "terraform" {
+  account_id   = "terraform"
+  display_name = "Terraform"
 }
 
 # GKE cluster
@@ -32,7 +33,7 @@ resource "google_container_node_pool" "gcnp" {
 
   node_config {
     machine_type    = var.machine_type
-    service_account = data.google_service_account.terraform.email
+    service_account = google_service_account.terraform.email
     oauth_scopes = [
       "https://www.googleapis.com/auth/logging.write",
       "https://www.googleapis.com/auth/monitoring",
