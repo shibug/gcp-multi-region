@@ -18,16 +18,6 @@ resource "kubernetes_namespace" "kn" {
   }
 }
 
-resource "kubernetes_service_account" "ksa" {
-  metadata {
-    name      = var.dbserver
-    namespace = kubernetes_namespace.kn.id
-    labels = {
-      app : var.dbserver
-    }
-  }
-}
-
 resource "kubernetes_secret" "ks-client-root" {
   metadata {
     name      = "${var.dbserver}.client.root"
@@ -41,6 +31,7 @@ resource "kubernetes_secret" "ks-client-root" {
     "ca.crt"          = "${file("${path.module}/certs/ca.crt")}"
     "client.root.crt" = "${file("${path.module}/certs/client.root.crt")}"
     "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
+    "client.root.pk8" = filebase64("${path.module}/certs/client.root.pk8")
   }
 }
 
@@ -59,6 +50,16 @@ resource "kubernetes_secret" "ks-node" {
     "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
     "node.crt"        = "${file("${path.module}/certs/node.crt")}"
     "node.key"        = "${file("${path.module}/certs/node.key")}"
+  }
+}
+
+resource "kubernetes_service_account" "ksa" {
+  metadata {
+    name      = var.dbserver
+    namespace = kubernetes_namespace.kn.id
+    labels = {
+      app : var.dbserver
+    }
   }
 }
 
