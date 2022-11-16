@@ -66,7 +66,7 @@ resource "kubernetes_deployment" "frontend_kd" {
 
         container {
           name  = var.frontend
-          image = "shibug/flowcrm:1.0.1"
+          image = "shibug/flowcrm:1.0.2"
 
           env {
             name  = "DB_URL"
@@ -85,6 +85,7 @@ resource "kubernetes_deployment" "frontend_kd" {
           volume_mount {
             name       = "certs"
             mount_path = "/certs"
+            read_only  = true
           }
 
           resources {
@@ -113,8 +114,7 @@ resource "kubernetes_deployment" "frontend_kd" {
         volume {
           name = "certs"
           secret {
-            secret_name  = "${var.dbserver}.client.root"
-            default_mode = "0400"
+            secret_name = "${var.dbserver}.client.root"
           }
         }
       }

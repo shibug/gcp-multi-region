@@ -18,7 +18,7 @@ resource "kubernetes_namespace" "kn" {
   }
 }
 
-resource "kubernetes_secret" "ks-client-root" {
+/* resource "kubernetes_secret" "ks-client-root" {
   metadata {
     name      = "${var.dbserver}.client.root"
     namespace = kubernetes_namespace.kn.id
@@ -31,9 +31,9 @@ resource "kubernetes_secret" "ks-client-root" {
     "ca.crt"          = "${file("${path.module}/certs/ca.crt")}"
     "client.root.crt" = "${file("${path.module}/certs/client.root.crt")}"
     "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
-    "client.root.pk8" = filebase64("${path.module}/certs/client.root.pk8")
+    "client.root.pk8" = "${file("${path.module}/certs/client.root.base64.pk8")}"
   }
-}
+} */
 
 resource "kubernetes_secret" "ks-node" {
   metadata {
@@ -46,8 +46,6 @@ resource "kubernetes_secret" "ks-node" {
 
   data = {
     "ca.crt"          = "${file("${path.module}/certs/ca.crt")}"
-    "client.root.crt" = "${file("${path.module}/certs/client.root.crt")}"
-    "client.root.key" = "${file("${path.module}/certs/client.root.key")}"
     "node.crt"        = "${file("${path.module}/certs/node.crt")}"
     "node.key"        = "${file("${path.module}/certs/node.key")}"
   }
