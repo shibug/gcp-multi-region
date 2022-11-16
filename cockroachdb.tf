@@ -290,6 +290,10 @@ resource "kubernetes_service" "ks-public" {
 
 resource "kubernetes_service" "ks" {
   metadata {
+    /* This service only exists to create DNS entries for each pod in the stateful
+    set such that they can resolve each other's IP addresses. It does not
+    create a load-balanced ClusterIP and should not be used directly by clients
+    in most circumstances. */
     name      = var.dbserver
     namespace = kubernetes_namespace.kn.id
     labels = {

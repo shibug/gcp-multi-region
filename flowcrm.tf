@@ -70,7 +70,7 @@ resource "kubernetes_deployment" "frontend_kd" {
 
           env {
             name  = "DB_URL"
-            value = "jdbc:postgresql://35.188.174.202:26257/flowcrm?sslmode=verify-ca&sslcert=certs/client.root.crt&sslkey=certs/client.root.pk8&sslrootcert=certs/ca.crt"
+            value = "jdbc:postgresql://cockroachdb-public.cockroachdb.svc.cluster.local:26257/flowcrm?sslmode=verify-ca&sslcert=certs/client.root.crt&sslkey=certs/client.root.pk8&sslrootcert=certs/ca.crt"
           }
           env {
             name  = "DB_USER"
