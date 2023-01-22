@@ -121,16 +121,14 @@ curl -i -X PUT -H  "Content-Type:application/json" \
 curl -i -X DELETE http://localhost:8083/connectors/sink-postgres-orders-00
 
 ----------------------------------------------------------------------------------
-
-
 insert into orders values (date 'epoch' + interval '1511299894888 milliseconds', '13485', 'Item_7');
 
 dki --name kafka-connect \
     -e CONNECT_PLUGIN_PATH=/usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars \
-    -e CONNECT_BOOTSTRAP_SERVERS=pkc-3w22w.us-central1.gcp.confluent.cloud:9092 -e CONNECT_GROUP_ID=kafka-connect \
+    -e CONNECT_BOOTSTRAP_SERVERS=pkc-3w22w.us-central1.gcp.confluent.cloud:9092 -e CONNECT_REST_PORT=8083 -e CONNECT_GROUP_ID=kafka-connect \
     -e CONNECT_CONFIG_STORAGE_TOPIC=_connect-configs -e CONNECT_OFFSET_STORAGE_TOPIC=_connect-offsets -e CONNECT_STATUS_STORAGE_TOPIC=_connect-status \
     -e CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter -e CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter \
-    -e CONNECT_REST_ADVERTISED_HOST_NAME="kafka-connect" -e CONNECT_REST_PORT=8083 \
+    -e CONNECT_REST_ADVERTISED_HOST_NAME="kafka-connect" \
     -e CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN="[%d] %p %X{connector.context}%m (%c:%L)%n" \
     -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR="3" -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR="3" -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR="3" \
     -e CONNECT_SECURITY_PROTOCOL=SASL_SSL -e CONNECT_SASL_MECHANISM=PLAIN \
@@ -140,3 +138,31 @@ dki --name kafka-connect \
     -p 8083:8083 confluentinc/cp-kafka-connect \
     bash -c "echo \"Installing Connector\"; confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.6.0; echo \"Launching Kafka Connect worker\"; /etc/confluent/docker/run"
 
+# Source Connector
+curl -i -X PUT -H  "Content-Type:application/json" \
+    http://localhost:8083/connectors/source-debezium-orders-00/config \
+    -d '{
+            "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+            "database.hostname": "mysql",
+            "database.port": "3306",
+            "database.user": "debezium",
+            "database.password": "dbz",
+            "database.server.id": "42",
+            "table.whitelist": "demo.orders",
+            "topic.prefix": "mysql-debezium-asgard",
+            "schema.history.internal.kafka.bootstrap.servers": "broker:29092",
+            "schema.history.internal.kafka.topic": "dbhistory.demo" ,
+            "decimal.handling.mode": "double",
+            "include.schema.changes": "true"
+    }'
+
+curl -i -X PUT -H  "Content-Type:application/json" \
+    http://localhost:8083/connectors/sink-elastic-orders-00/config \
+    -d '{
+        "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+        "topics": "mysql-debezium-asgard.demo.ORDERS",
+        "connection.url": "http://elasticsearch:9200",
+        "type.name": "type.name=kafkaconnect",
+        "key.ignore": "true",
+        "schema.ignore": "true"
+    }'
