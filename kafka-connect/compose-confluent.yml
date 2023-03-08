@@ -2,7 +2,7 @@
 version: '2'
 services:
   kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.3.1.arm64
+    image: confluentinc/cp-kafka-connect:7.3.2
     container_name: kafka-connect
     ports:
       - 8083:8083
@@ -15,7 +15,9 @@ services:
       CONNECT_STATUS_STORAGE_TOPIC: _connect-status
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: 'https://psrc-30dr2.us-central1.gcp.confluent.cloud'
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "https://psrc-4nyjd.us-central1.gcp.confluent.cloud"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_CREDENTIALS_SOURCE: "USER_INFO"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_BASIC_AUTH_USER_INFO: "BEVK7I4UNXMS64LQ:A2IJMR9v7wDs2X28it53jYVY1jtiAr3Q+MbnbJg4zD6o+/Pofu8SMRD9hjw0xSTV"
       CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
       CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN: "[%d] %p %X{connector.context}%m (%c:%L)%n"
       CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "3"
@@ -23,7 +25,21 @@ services:
       CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "3"
       CONNECT_SECURITY_PROTOCOL: "SASL_SSL"
       CONNECT_SASL_MECHANISM: "PLAIN"
-      CONNECT_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username='I3O6EKLZ5SVNVGHP' password='BnvJE3ePW8gkW7/b9HDA1T96cJw741DoPEmLlEB8bfepn0N0xm7/92ib/8WeOXyL';"
+      CONNECT_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username='FLAWK27UUYGHSORO' password='ZGleKIbERe56DVAJ0ltmHnMlWPc6jTcyvAVJ5jF6IMz5xdKokorVerwYwDmYxJWU';"
+      CONNECT_REQUEST_TIMEOUT_MS: 20000
+      CONNECT_RETRY_BACKOFF_MS: 500
+      CONNECT_PRODUCER_BOOTSTRAP_SERVERS: "pkc-3w22w.us-central1.gcp.confluent.cloud:9092"
+      CONNECT_PRODUCER_SECURITY_PROTOCOL: "SASL_SSL"
+      CONNECT_PRODUCER_SASL_MECHANISM: "PLAIN"
+      CONNECT_PRODUCER_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username='FLAWK27UUYGHSORO' password='ZGleKIbERe56DVAJ0ltmHnMlWPc6jTcyvAVJ5jF6IMz5xdKokorVerwYwDmYxJWU';"
+      CONNECT_PRODUCER_REQUEST_TIMEOUT_MS: 20000
+      CONNECT_PRODUCER_RETRY_BACKOFF_MS: 500
+      CONNECT_CONSUMER_BOOTSTRAP_SERVERS: "pkc-3w22w.us-central1.gcp.confluent.cloud:9092"
+      CONNECT_CONSUMER_SECURITY_PROTOCOL: "SASL_SSL"
+      CONNECT_CONSUMER_SASL_MECHANISM: "PLAIN"
+      CONNECT_CONSUMER_SASL_JAAS_CONFIG: "org.apache.kafka.common.security.plain.PlainLoginModule required username='FLAWK27UUYGHSORO' password='ZGleKIbERe56DVAJ0ltmHnMlWPc6jTcyvAVJ5jF6IMz5xdKokorVerwYwDmYxJWU';"
+      CONNECT_CONSUMER_REQUEST_TIMEOUT_MS: 20000
+      CONNECT_CONSUMER_RETRY_BACKOFF_MS: 500
     #  ---------------
       CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars
     # If you want to use the Confluent Hub installer to d/l component, but make them available
@@ -37,9 +53,9 @@ services:
       - -c
       - |
         echo "Installing Connector"
+        confluent-hub install --no-prompt /data/connect-jars/debezium-debezium-connector-mysql-2.0.1.zip
         confluent-hub install --no-prompt /data/connect-jars/confluentinc-kafka-connect-jdbc-10.6.3.zip
         confluent-hub install --no-prompt /data/connect-jars/confluentinc-kafka-connect-elasticsearch-11.1.3.zip
-        confluent-hub install --no-prompt /data/connect-jars/neo4j-kafka-connect-neo4j-2.0.0.zip
         #
         echo "Launching Kafka Connect worker"
         /etc/confluent/docker/run &
@@ -119,24 +135,3 @@ services:
             --data-binary '{"enabled":false}' \
             --compressed
         sleep infinity
-
-  neo4j:
-    image: neo4j
-    container_name: neo4j
-    ports:
-    - "7474:7474"
-    - "7687:7687"
-    environment:
-      NEO4J_AUTH: neo4j/connect1
-      NEO4J_dbms_memory_heap_max__size: 4G
-      NEO4J_ACCEPT_LICENSE_AGREEMENT: 'yes'
-
-  kcat:
-    image: shibug/kcat:1.7.1
-    container_name: kcat
-    entrypoint: 
-      - /bin/sh 
-      - -c 
-      - |
-        apk add jq; 
-        while [ 1 -eq 1 ];do sleep 60;done

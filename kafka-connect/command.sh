@@ -32,18 +32,20 @@ curl -i -X PUT -H  "Content-Type:application/json" \
             "database.port": "3306",
             "database.user": "debezium",
             "database.password": "dbz",
-            "database.server.id": "42",
-            "database.server.name": "asgard",
-            "table.whitelist": "demo.orders",
-            "database.history.kafka.bootstrap.servers": "broker:29092",
-            "database.history.kafka.topic": "dbhistory.demo" ,
-            "decimal.handling.mode": "double",
-            "include.schema.changes": "true",
-            "transforms": "unwrap,addTopicPrefix",
-            "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-            "transforms.addTopicPrefix.type":"org.apache.kafka.connect.transforms.RegexRouter",
-            "transforms.addTopicPrefix.regex":"(.*)",
-            "transforms.addTopicPrefix.replacement":"mysql-debezium-$1"
+            "database.server.id": "18859",
+            "table.include.list": "demo.ORDERS",
+            "schema.history.internal.kafka.bootstrap.servers": "pkc-3w22w.us-central1.gcp.confluent.cloud:9092",
+            "schema.history.internal.kafka.topic": "schemahistory.demo",
+            "schema.history.internal.consumer.security.protocol": "SASL_SSL",
+            "schema.history.internal.consumer.sasl.mechanism": "PLAIN",
+            "schema.history.internal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username='FLAWK27UUYGHSORO' password='ZGleKIbERe56DVAJ0ltmHnMlWPc6jTcyvAVJ5jF6IMz5xdKokorVerwYwDmYxJWU';",
+            "schema.history.internal.producer.security.protocol": "SASL_SSL",
+            "schema.history.internal.producer.sasl.mechanism": "PLAIN",
+            "schema.history.internal.producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username='FLAWK27UUYGHSORO' password='ZGleKIbERe56DVAJ0ltmHnMlWPc6jTcyvAVJ5jF6IMz5xdKokorVerwYwDmYxJWU';",            
+            "topic.prefix": "shibu",
+            "topic.creation.default.replication.factor": "3",
+            "topic.creation.default.partitions": "1",
+            "include.schema.changes": "true"
     }'
 
  # Check the status of the connector
@@ -52,20 +54,15 @@ curl -s "http://localhost:8083/connectors?expand=info&expand=status" | \
        column -s : -t| sed 's/\"//g'| sort
 
 # View the topic in the CLI:
-dki edenhill/kcat:1.7.1 kcat \
-        -b pkc-3w22w.us-central1.gcp.confluent.cloud:9092 \
-        -X security.protocol=sasl_ssl -X sasl.mechanisms=PLAIN \
-        -X sasl.username=I3O6EKLZ5SVNVGHP -X sasl.password='BnvJE3ePW8gkW7/b9HDA1T96cJw741DoPEmLlEB8bfepn0N0xm7/92ib/8WeOXyL' \
-        -t orders \
-        -C -o -10 -q
+kcat -C -s value=avro -t shibu.demo.ORDERS -o -10 -q -f 'key %k: %s\n\n'
 
 # Stream to Cockroach
 curl -i -X PUT -H  "Content-Type:application/json" \
     http://localhost:8083/connectors/sink-cockroachdb-orders-00/config \
     -d '{
             "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
-            "topics": "mysql-debezium-asgard.demo.ORDERS",
-            "connection.url": "jdbc:postgresql://34.121.226.93:26257/flowcrm?sslmode=verify-ca&sslcert=/data/client.root.crt&sslkey=/data/client.root.pk8&sslrootcert=/data/ca.crt",
+            "topics": "shibu.demo.ORDERS",
+            "connection.url": "jdbc:postgresql://34.72.138.31:26257/flowcrm?sslmode=verify-ca&sslcert=/data/client.root.crt&sslkey=/data/client.root.pk8&sslrootcert=/data/ca.crt",
             "connection.user": "root",
             "dialect.name": "PostgreSqlDatabaseDialect",
             "table.name.format": "public.orders",
@@ -73,7 +70,10 @@ curl -i -X PUT -H  "Content-Type:application/json" \
             "pk.fields": "id",
             "insert.mode": "upsert",
             "auto.create": "true",
-            "auto.evolve": "true"
+            "auto.evolve": "true",
+            "transforms": "unwrap",
+            "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+            "transforms.unwrap.drop.tombstones": "false"
         } '
 
 # Stream to Postgres
@@ -118,7 +118,7 @@ curl -i -X PUT -H  "Content-Type:application/json" \
         } '
 
 # Delete connector        
-curl -i -X DELETE http://localhost:8083/connectors/sink-postgres-orders-00
+curl -i -X DELETE http://localhost:8083/connectors/sink-cockroachdb-orders-00
 
 ----------------------------------------------------------------------------------
 insert into orders values (date 'epoch' + interval '1511299894888 milliseconds', '13485', 'Item_7');
